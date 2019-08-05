@@ -145,4 +145,7 @@ public class TrackableComputationExt extends Computation {
 		return null;
 	}
 
+	IEclipseContext getOriginatingContext() {
+		return originatingContext;
+	}
 }

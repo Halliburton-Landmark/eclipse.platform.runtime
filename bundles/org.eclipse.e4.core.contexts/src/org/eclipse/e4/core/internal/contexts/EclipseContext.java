@@ -432,6 +432,7 @@ public class EclipseContext implements IEclipseContext {
 			return; // no-op
 		if (parentContext != null)
 			parentContext.removeChild(this);
+		dropTrackedComputationsFromTornParents(parent);
 		Set<Scheduled> scheduled = new LinkedHashSet<>();
 		handleReparent((EclipseContext) parent, scheduled);
 		localValues.put(PARENT, parent);
@@ -439,6 +440,30 @@ public class EclipseContext implements IEclipseContext {
 			((EclipseContext) parent).addChild(this);
 		processScheduled(scheduled);
 		return;
+	}
+
+	/**
+	 * This context is no more a dependency for tracked computations which
+	 * originating contexts are now outside this context's parents hierarchy.
+	 */
+	private void dropTrackedComputationsFromTornParents(IEclipseContext newParent) {
+		weakListeners.getListeners().stream().filter(TrackableComputationExt.class::isInstance)
+			.map(TrackableComputationExt.class::cast).filter(tce -> isTorn(tce.getOriginatingContext(), newParent))
+			.forEach(weakListeners::remove);
+		for (EclipseContext c : getChildren()) {
+			c.dropTrackedComputationsFromTornParents(newParent);
+		}
+	}
+
+	/**
+	 * Checks is a dependency is in this context's new parent context hierarchy.
+	 */
+	private static boolean isTorn(IEclipseContext dependency, IEclipseContext newParent) {
+		for (IEclipseContext context = newParent; context != null; context = context.getParent()) {
+			if (context == dependency)
+				return false;
+		}
+		return true;
 	}
 
 	/**
