@@ -129,7 +129,7 @@ public class TrackableComputationExt extends Computation {
 			}
 		}
 		if (!result) {
-			((EclipseContext) originatingContext).removeRAT(this);
+			((EclipseContext) event.getContext()).removeRAT(this);
 		}
 		return result;
 	}
