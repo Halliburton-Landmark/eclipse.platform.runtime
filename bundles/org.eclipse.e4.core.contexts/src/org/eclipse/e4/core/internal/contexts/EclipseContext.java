@@ -670,9 +670,9 @@ public class EclipseContext implements IEclipseContext {
 			}
 		}
 		if (childContext == internalGet(this, ACTIVE_CHILD, true)) {
-			System.err.println(this + " removeChild remove " + ACTIVE_CHILD); //$NON-NLS-1$
-			remove(ACTIVE_CHILD);
-			System.err.println(this + " removeChild remove done " + ACTIVE_CHILD); //$NON-NLS-1$
+			System.err.println(this + " set null " + ACTIVE_CHILD); //$NON-NLS-1$
+			set(ACTIVE_CHILD, null);
+			System.err.println(this + " done set null " + ACTIVE_CHILD); //$NON-NLS-1$
 		}
 	}
 
