@@ -73,9 +73,10 @@ public class WeakGroupedListenerList {
 
 	synchronized public void remove(Computation computation) {
 		WeakComputationReference ref = new WeakComputationReference(computation);
-		Collection<HashSet<WeakComputationReference>> allListeners = listeners.values();
-		for (HashSet<WeakComputationReference> group : allListeners) {
-			group.remove(ref);
+		Collection<Entry<String, HashSet<WeakComputationReference>>> allListeners = listeners.entrySet();
+		for (Entry<String, HashSet<WeakComputationReference>> group : allListeners) {
+			if (group.getValue().remove(ref))
+				System.err.println(computation + " removed from group " + group.getKey()); //$NON-NLS-1$
 		}
 	}
 
