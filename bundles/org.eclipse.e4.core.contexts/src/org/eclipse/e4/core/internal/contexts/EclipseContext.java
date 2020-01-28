@@ -516,21 +516,20 @@ public class EclipseContext implements IEclipseContext {
 		// TBD should we lock waiting list while doing reparent?
 		// Add "boolean inReparent" on the root context and process right away?
 		processWaiting();
-		// 1) everybody who depends on me: I need to collect combined list of names injected
+
+		// 1) remove all Computations that originate from contexts not present in
+		// newParent path
+		if (oldParent != null) {
+			List<EclipseContext> uncommonAncestors = getUncommonAncestors(oldParent, newParent);
+			System.err.println("removeComputations originating from " + uncommonAncestors); //$NON-NLS-1$
+			removeComputations(uncommonAncestors.toArray(), scheduled);
+		}
+		// 2) everybody who depends on me: I need to collect combined list of names
+		// injected
 		Set<String> usedNames = new HashSet<>();
 		collectDependentNames(usedNames);
-
-		if (oldParent != null) {
-			// remove all Computations that originate from contexts not present in
-			// newParent path
-			List<EclipseContext> uncommonAncestors = getUncommonAncestors(oldParent, newParent);
-			if (!uncommonAncestors.isEmpty()) {
-				System.err.println("removeComputations originating from " + uncommonAncestors); //$NON-NLS-1$
-				removeComputations(uncommonAncestors.toArray(), scheduled);
-			}
-		}
 		System.err.println(this + " handleReparent " + oldParent + ' ' + newParent + " usedNames " + usedNames); //$NON-NLS-1$//$NON-NLS-2$
-		// 2) for each used name:
+		// 3) for each used name:
 		for (String name : usedNames) {
 			if (localValues.containsKey(name))
 				continue; // it is a local value
