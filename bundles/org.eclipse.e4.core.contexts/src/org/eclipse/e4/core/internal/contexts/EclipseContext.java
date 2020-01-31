@@ -437,9 +437,9 @@ public class EclipseContext implements IEclipseContext {
 		EclipseContext parentContext = (EclipseContext) localValues.get(PARENT);
 		if (parent == parentContext)
 			return; // no-op
+		localValues.put(PARENT, parent);
 		if (parentContext != null)
 			parentContext.removeChild(this);
-		localValues.put(PARENT, parent);
 		Set<Scheduled> scheduled = new LinkedHashSet<>();
 //		if (parentContext != null && this == parentContext.internalGet(this, ACTIVE_CHILD, true)) {
 //			System.err.println("setParent remove ACTIVE_CHILD"); //$NON-NLS-1$
@@ -528,17 +528,22 @@ public class EclipseContext implements IEclipseContext {
 		// injected
 		Set<String> usedNames = new HashSet<>();
 		collectDependentNames(usedNames);
+		if (oldParent != null)
 		System.err.println(this + " handleReparent " + oldParent + ' ' + newParent + " usedNames " + usedNames); //$NON-NLS-1$//$NON-NLS-2$
 		// 3) for each used name:
 		for (String name : usedNames) {
-			if (localValues.containsKey(name))
+			boolean isParent = name.equals(PARENT);
+			if (!isParent && localValues.containsKey(name))
 				continue; // it is a local value
-			Object oldValue = (oldParent != null) ? oldParent.internalGet(this, name, false) : null;
-			Object newValue = (newParent != null) ? newParent.internalGet(this, name, false) : null;
+			Object oldValue = isParent ? oldParent
+					: oldParent != null ? oldParent.internalGet(this, name, false) : null;
+			Object newValue = isParent ? newParent
+					: newParent != null ? newParent.internalGet(this, name, false) : null;
 			if (oldValue != newValue)
 				invalidate(name, ContextChangeEvent.ADDED, oldValue, newValue, scheduled);
 		}
-		System.err.println("reparent scheduled " + scheduled.size()); //$NON-NLS-1$
+		if (oldParent != null)
+			System.err.println(this + " reparent scheduled " + scheduled.size()); //$NON-NLS-1$
 		invalidateLocalComputations(scheduled);
 	}
 

@@ -130,8 +130,7 @@ public class TrackableComputationExt extends Computation {
 
 		if (eventType == ContextChangeEvent.DISPOSE) {
 			if (originatingContext == eventsContext) {
-				System.err.println(this + " " + //$NON-NLS-1$
-						originatingContext + " DISPOSE removeRAT " + event.getName()); //$NON-NLS-1$
+				System.err.println(originatingContext + " DISPOSE removeRAT " + this); //$NON-NLS-1$
 //				new Throwable().printStackTrace(System.err);
 				((EclipseContext) originatingContext).removeRAT(this);
 				return false;
