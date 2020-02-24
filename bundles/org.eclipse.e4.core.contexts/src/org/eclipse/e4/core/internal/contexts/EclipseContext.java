@@ -521,7 +521,7 @@ public class EclipseContext implements IEclipseContext {
 		// newParent path
 		if (oldParent != null) {
 			List<EclipseContext> uncommonAncestors = getUncommonAncestors(oldParent, newParent);
-			System.err.println("removeComputations originating from " + uncommonAncestors); //$NON-NLS-1$
+			System.err.println(this + " removeComputations originating from " + uncommonAncestors); //$NON-NLS-1$
 			removeComputations(uncommonAncestors.toArray(), scheduled);
 		}
 		// 2) everybody who depends on me: I need to collect combined list of names
