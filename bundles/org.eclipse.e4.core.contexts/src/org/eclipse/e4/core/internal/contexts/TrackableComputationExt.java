@@ -64,9 +64,6 @@ public class TrackableComputationExt extends Computation {
 	public void handleInvalid(ContextChangeEvent event, Set<Scheduled> scheduledList) {
 		//	don't call super - we keep the link unless uninjected / disposed
 		int eventType = event.getEventType();
-//		System.err.println(hashCode + " " + runnable + " " + event.getName() + " TrackableComputationExt handleInvalid " //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-//				+ originatingContext
-//				+ " " + eventType + " " + (event.getContext() == originatingContext));//$NON-NLS-1$ //$NON-NLS-2$
 		if (eventType == ContextChangeEvent.INITIAL || eventType == ContextChangeEvent.DISPOSE
 				|| eventType == ContextChangeEvent.REPARENTED) {
 			// process structural changes immediately
@@ -85,9 +82,6 @@ public class TrackableComputationExt extends Computation {
 		final EclipseContext eventsContext = (EclipseContext) event.getContext();
 		if (eventType == ContextChangeEvent.REPARENTED) {
 			if (Arrays.stream(event.getArguments()).anyMatch(c -> c == originatingContext)) {
-				System.err.println(this + " " + //$NON-NLS-1$
-						originatingContext + " REPARENTED removeRAT from " + eventsContext); //$NON-NLS-1$
-//				new Throwable().printStackTrace(System.err);
 				eventsContext.removeRAT(this);
 				cachedEvent = null;
 				return false;
@@ -130,16 +124,11 @@ public class TrackableComputationExt extends Computation {
 
 		if (eventType == ContextChangeEvent.DISPOSE) {
 			if (originatingContext == eventsContext) {
-				System.err.println(originatingContext + " DISPOSE removeRAT " + this); //$NON-NLS-1$
-//				new Throwable().printStackTrace(System.err);
 				((EclipseContext) originatingContext).removeRAT(this);
 				return false;
 			}
 		}
 		if (!result) {
-			if (eventsContext != originatingContext)
-				System.err.println(this + " " + //$NON-NLS-1$
-						event.getContext() + " removeRAT " + originatingContext + ' ' + event.getName()); //$NON-NLS-1$
 			((EclipseContext) originatingContext).removeRAT(this);
 		}
 		return result;
