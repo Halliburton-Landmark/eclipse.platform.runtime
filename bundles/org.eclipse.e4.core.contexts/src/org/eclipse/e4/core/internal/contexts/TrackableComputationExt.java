@@ -84,8 +84,8 @@ public class TrackableComputationExt extends Computation {
 			if (Arrays.stream(event.getArguments()).anyMatch(c -> c == originatingContext)) {
 				eventsContext.removeRAT(this);
 				cachedEvent = null;
-				return false;
 			}
+			return false;
 		}
 		if ((runnable instanceof RunAndTrackExt) && ((RunAndTrackExt) runnable).batchProcess()) {
 			if ((eventType == ContextChangeEvent.ADDED) || (eventType == ContextChangeEvent.REMOVED)) {
@@ -110,7 +110,7 @@ public class TrackableComputationExt extends Computation {
 					}
 				}
 			}
-			if (eventType != ContextChangeEvent.UPDATE && eventType != ContextChangeEvent.REPARENTED) {
+			if (eventType != ContextChangeEvent.UPDATE) {
 				if (runnable instanceof RunAndTrackExt)
 					result = ((RunAndTrackExt) runnable).update(event.getContext(), event.getEventType(), event.getArguments());
 				else {
