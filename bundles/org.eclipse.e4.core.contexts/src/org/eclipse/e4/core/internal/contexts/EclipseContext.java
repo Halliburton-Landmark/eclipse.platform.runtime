@@ -506,7 +506,9 @@ public class EclipseContext implements IEclipseContext {
 		// newParent path
 		if (oldParent != null) {
 			List<EclipseContext> uncommonAncestors = getUncommonAncestors(oldParent, newParent);
-			removeComputations(uncommonAncestors.toArray(), scheduled);
+			if (!uncommonAncestors.isEmpty()) {
+				removeComputations(uncommonAncestors.toArray(), scheduled);
+			}
 		}
 		// 2) everybody who depends on me: I need to collect combined list of names
 		// injected
