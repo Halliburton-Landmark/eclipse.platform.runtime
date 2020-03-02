@@ -431,13 +431,19 @@ public class EclipseContext implements IEclipseContext {
 		if (parent == parentContext)
 			return; // no-op
 		localValues.put(PARENT, parent);
-		if (parentContext != null)
+		boolean wasActive = false;
+		if (parentContext != null) {
+			wasActive = this == parentContext.internalGet(parentContext, ACTIVE_CHILD, true);
 			parentContext.removeChild(this);
+		}
 		Set<Scheduled> scheduled = new LinkedHashSet<>();
 		handleReparent(parentContext, (EclipseContext) parent, scheduled);
 		if (parent != null)
 			((EclipseContext) parent).addChild(this);
 		processScheduled(scheduled);
+		if (wasActive) {
+			activate();
+		}
 		return;
 	}
 
