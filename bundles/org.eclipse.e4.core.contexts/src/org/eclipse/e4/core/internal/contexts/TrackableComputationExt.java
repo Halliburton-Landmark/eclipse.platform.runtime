@@ -14,6 +14,8 @@
 package org.eclipse.e4.core.internal.contexts;
 
 import java.lang.ref.Reference;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.Set;
 import org.eclipse.e4.core.contexts.IEclipseContext;
 import org.eclipse.e4.core.contexts.RunAndTrack;
@@ -41,9 +43,8 @@ public class TrackableComputationExt extends Computation {
 	protected int calcHashCode() {
 		final int prime = 31;
 		int result = 1;
-		result = prime * result + ((originatingContext == null) ? 0 : originatingContext.hashCode());
-		result = prime * result + ((runnable == null) ? 0 : runnable.hashCode());
-		return result;
+		result = prime * result + Objects.hashCode(originatingContext);
+		return prime * result + Objects.hashCode(runnable);
 	}
 
 	@Override
@@ -55,25 +56,17 @@ public class TrackableComputationExt extends Computation {
 		if (getClass() != obj.getClass())
 			return false;
 		TrackableComputationExt other = (TrackableComputationExt) obj;
-		if (originatingContext == null) {
-			if (other.originatingContext != null)
-				return false;
-		} else if (!originatingContext.equals(other.originatingContext))
-			return false;
-		if (runnable == null) {
-			if (other.runnable != null)
-				return false;
-		} else if (!runnable.equals(other.runnable))
-			return false;
-		return true;
+		return Objects.equals(this.originatingContext, other.originatingContext)
+				&& Objects.equals(this.runnable, other.runnable);
 	}
 
 	@Override
 	public void handleInvalid(ContextChangeEvent event, Set<Scheduled> scheduledList) {
 		//	don't call super - we keep the link unless uninjected / disposed
 		int eventType = event.getEventType();
-		if (eventType == ContextChangeEvent.INITIAL || eventType == ContextChangeEvent.DISPOSE) {
-			// process right away
+		if (eventType == ContextChangeEvent.INITIAL || eventType == ContextChangeEvent.DISPOSE
+				|| eventType == ContextChangeEvent.REPARENTED) {
+			// process structural changes immediately
 			update(event);
 		} else {
 			// schedule processing
@@ -83,12 +76,20 @@ public class TrackableComputationExt extends Computation {
 
 	public boolean update(ContextChangeEvent event) {
 		// is this a structural event?
-		// structural changes: INITIAL, DISPOSE, UNINJECTED are always processed right away
-		int eventType = event.getEventType();
+		// structural changes: INITIAL, DISPOSE, UNINJECTED, are REPARENTED are always
+		// processed immediately
+		final int eventType = event.getEventType();
+		final EclipseContext eventsContext = (EclipseContext) event.getContext();
+		if (eventType == ContextChangeEvent.REPARENTED) {
+			if (Arrays.stream(event.getArguments()).anyMatch(c -> c == originatingContext)) {
+				eventsContext.removeRAT(this);
+				cachedEvent = null;
+			}
+			return false;
+		}
 		if ((runnable instanceof RunAndTrackExt) && ((RunAndTrackExt) runnable).batchProcess()) {
 			if ((eventType == ContextChangeEvent.ADDED) || (eventType == ContextChangeEvent.REMOVED)) {
 				cachedEvent = event;
-				EclipseContext eventsContext = (EclipseContext) event.getContext();
 				eventsContext.addWaiting(this);
 				return true;
 			}
@@ -120,10 +121,9 @@ public class TrackableComputationExt extends Computation {
 		} finally {
 			((EclipseContext) originatingContext).popComputation(this);
 		}
-		EclipseContext eventsContext = (EclipseContext) event.getContext();
 
 		if (eventType == ContextChangeEvent.DISPOSE) {
-			if (originatingContext.equals(eventsContext)) {
+			if (originatingContext == eventsContext) {
 				((EclipseContext) originatingContext).removeRAT(this);
 				return false;
 			}

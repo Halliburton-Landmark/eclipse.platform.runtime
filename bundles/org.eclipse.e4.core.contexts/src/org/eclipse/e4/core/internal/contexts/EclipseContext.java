@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
 import org.eclipse.e4.core.contexts.IContextFunction;
@@ -83,9 +84,7 @@ public class EclipseContext implements IEclipseContext {
 			if (getClass() != obj.getClass())
 				return false;
 			Scheduled other = (Scheduled) obj;
-			if (!event.equals(other.event))
-				return false;
-			return runnable.equals(other.runnable);
+			return Objects.equals(this.event, other.event) && Objects.equals(this.runnable, other.runnable);
 		}
 	}
 
@@ -133,7 +132,7 @@ public class EclipseContext implements IEclipseContext {
 	public Set<EclipseContext> getChildren() {
 		Set<EclipseContext> result;
 		synchronized (children) {
-			if (children.size() == 0)
+			if (children.isEmpty())
 				return noChildren;
 			result = new HashSet<>(children.size());
 			for (Iterator<WeakReference<EclipseContext>> i = children.iterator(); i.hasNext();) {
@@ -168,7 +167,8 @@ public class EclipseContext implements IEclipseContext {
 	@Override
 	public void dispose() {
 		// dispose of child contexts first
-		for (EclipseContext childContext : getChildren()) {
+		Set<EclipseContext> childContexts = getChildren();
+		for (EclipseContext childContext : childContexts) {
 			childContext.dispose();
 		}
 
@@ -205,7 +205,7 @@ public class EclipseContext implements IEclipseContext {
 		EclipseContext rootContext = null;
 		if (parent != null) {
 			rootContext = getRoot();
-			if (this == parent.getActiveChild())
+			if (this == parent.internalGet(parent, ACTIVE_CHILD, true))
 				parent.set(ACTIVE_CHILD, null);
 		}
 
@@ -302,7 +302,7 @@ public class EclipseContext implements IEclipseContext {
 			computation.handleInvalid(event, scheduled);
 		}
 		Set<Computation> namedComputations = weakListeners.getListeners(name);
-		if (namedComputations != null && namedComputations.size() > 0) {
+		if (namedComputations != null && !namedComputations.isEmpty()) {
 			if (event == null) {
 				event = new ContextChangeEvent(this, eventType, null, name, oldValue);
 			}
@@ -405,7 +405,7 @@ public class EclipseContext implements IEclipseContext {
 		boolean containsKey = localValues.containsKey(name);
 		if (containsKey) {
 			if (!checkModifiable(name)) {
-				String tmp = "Variable " + name + " is not modifiable in the context " + toString(); //$NON-NLS-1$ //$NON-NLS-2$
+				String tmp = "Variable " + name + " is not modifiable in the context " + this; //$NON-NLS-1$ //$NON-NLS-2$
 				throw new IllegalArgumentException(tmp);
 			}
 			Object oldValue = localValues.put(name, value);
@@ -430,14 +430,20 @@ public class EclipseContext implements IEclipseContext {
 		EclipseContext parentContext = (EclipseContext) localValues.get(PARENT);
 		if (parent == parentContext)
 			return; // no-op
-		if (parentContext != null)
-			parentContext.removeChild(this);
-		Set<Scheduled> scheduled = new LinkedHashSet<>();
-		handleReparent((EclipseContext) parent, scheduled);
 		localValues.put(PARENT, parent);
+		boolean wasActive = false;
+		if (parentContext != null) {
+			wasActive = this == parentContext.internalGet(parentContext, ACTIVE_CHILD, true);
+			parentContext.removeChild(this);
+		}
+		Set<Scheduled> scheduled = new LinkedHashSet<>();
+		handleReparent(parentContext, (EclipseContext) parent, scheduled);
 		if (parent != null)
 			((EclipseContext) parent).addChild(this);
 		processScheduled(scheduled);
+		if (wasActive) {
+			activate();
+		}
 		return;
 	}
 
@@ -497,27 +503,80 @@ public class EclipseContext implements IEclipseContext {
 		return weakListeners.getListeners();
 	}
 
-	private void handleReparent(EclipseContext newParent, Set<Scheduled> scheduled) {
+	private void handleReparent(EclipseContext oldParent, EclipseContext newParent, Set<Scheduled> scheduled) {
 		// TBD should we lock waiting list while doing reparent?
 		// Add "boolean inReparent" on the root context and process right away?
 		processWaiting();
-		// 1) everybody who depends on me: I need to collect combined list of names injected
+
+		// 1) remove all Computations that originate from contexts not present in
+		// newParent path
+		if (oldParent != null) {
+			List<EclipseContext> uncommonAncestors = getUncommonAncestors(oldParent, newParent);
+			if (!uncommonAncestors.isEmpty()) {
+				removeComputations(uncommonAncestors.toArray(), scheduled);
+			}
+		}
+		// 2) everybody who depends on me: I need to collect combined list of names
+		// injected
 		Set<String> usedNames = new HashSet<>();
 		collectDependentNames(usedNames);
-
-		// 2) for each used name:
+		// 3) for each used name:
 		for (String name : usedNames) {
-			if (localValues.containsKey(name))
+			boolean isParent = name.equals(PARENT);
+			if (!isParent && localValues.containsKey(name))
 				continue; // it is a local value
-			Object oldValue = get(name);
-			Object newValue = (newParent != null) ? newParent.internalGet(this, name, false) : null;
+			Object oldValue = isParent ? oldParent
+					: oldParent != null ? oldParent.internalGet(this, name, false) : null;
+			Object newValue = isParent ? newParent
+					: newParent != null ? newParent.internalGet(this, name, false) : null;
 			if (oldValue != newValue)
 				invalidate(name, ContextChangeEvent.ADDED, oldValue, newValue, scheduled);
 		}
-
 		invalidateLocalComputations(scheduled);
 	}
 
+	private void removeComputations(Object[] abandonedContexts, Set<Scheduled> scheduled) {
+		Set<EclipseContext> childContexts = getChildren();
+		for (EclipseContext childContext : childContexts) {
+			childContext.removeComputations(abandonedContexts, scheduled);
+		}
+		Set<Computation> allComputations = new HashSet<>();
+		allComputations.addAll(activeRATs);
+		allComputations.addAll(getListeners());
+		if (!allComputations.isEmpty()) {
+			ContextChangeEvent event = new ContextChangeEvent(this, ContextChangeEvent.REPARENTED, abandonedContexts,
+					null, null);
+			for (Computation computation : allComputations) {
+				computation.handleInvalid(event, scheduled);
+			}
+		}
+	}
+
+	// return path elements of oldParent are not present in newParent
+	private List<EclipseContext> getUncommonAncestors(EclipseContext oldParent, EclipseContext newParent) {
+		return getUncommonAncestors(getPath(oldParent), getPath(newParent));
+	}
+
+	// return path elements that are not present in path2
+	private List<EclipseContext> getUncommonAncestors(List<EclipseContext> path, List<EclipseContext> path2) {
+		int i = path.size() - 1;
+		int i2 = path2.size() - 1;
+		while (i >= 0 && i2 >= 0 && path.get(i) == path2.get(i2)) {
+			--i;
+			--i2;
+		}
+		return path.subList(0, i + 1);
+	}
+
+	// return path from input context to its root context
+	private List<EclipseContext> getPath(EclipseContext ec) {
+		List<EclipseContext> path = new ArrayList<>();
+		while (ec != null) {
+			path.add(ec);
+			ec = ec.getParent();
+		}
+		return path;
+	}
 	protected void invalidateLocalComputations(Set<Scheduled> scheduled) {
 		ContextChangeEvent event = new ContextChangeEvent(this, ContextChangeEvent.ADDED, null, null, null);
 		for (Computation computation : localValueComputations.values()) {
@@ -598,9 +657,12 @@ public class EclipseContext implements IEclipseContext {
 				}
 				if (referredContext == childContext) {
 					i.remove();
-					return;
+					break;
 				}
 			}
+		}
+		if (childContext == internalGet(this, ACTIVE_CHILD, true)) {
+			set(ACTIVE_CHILD, null);
 		}
 	}
 
